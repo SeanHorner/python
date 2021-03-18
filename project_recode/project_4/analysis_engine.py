@@ -63,6 +63,79 @@ def q2(spark: SparkSession, df: ps.sql.DataFrame):
 def q3(spark: SparkSession, df: ps.sql.DataFrame):
     print("Analysis 3 started...")
 
+    # Aux function to find all mentions of a given technology in the descriptions of meetings spanning the given years.
+    def tech_mentions(technology, year_start, year_end) -> list[int]:
+        interim_1 = df.select('description', 'time').filter(df['description'].contains(technology))
+        working_list: list[int] = []
+        for year in range(year_start, year_end + 1):
+            print(f"\t\tcalculating for year {year}...")
+            start_millis = (year - 1970) * 31536000000
+            end_millis = (year + 1 - 1970) * 31536000000
+
+            result = interim_1 \
+                .filter(start_millis <= df['time']) \
+                .filter(df['time'] <= end_millis) \
+                .count()
+            working_list.append(result)
+
+        return working_list
+
+    # Dictionary containing all of the technologies and their era (<, >, =90's)
+    tech_dict = {"ada": "<90's", "android": ">90's", "clojure": ">90's", "cobol": "<90's",
+                 "dart": ">90's",       "delphi": "=90's",      "fortran": "<90's",     "ios": ">90's",
+                 "java": "=90's",       "javascript": "=90's",  "kotlin": ">90's",      "labview": "<90's",
+                 "matlab": "<90's",     "pascal": "<90's",      "perl": "<90's",        "php": "90's",
+                 "powershell": ">90's", "python": "=90's",      "ruby": "=90's",        "rust": ">90's",
+                 "scala": ">90's",      "sql": "<90's",         "typescript": ">90's",  "visual basic ": "=90's",
+                 "wolfram": "<90's"}
+
+    # Creating the schema for the results DataFrame
+    q3_schema = StructType([StructField('Technology', StringType(), True), StructField('Era', StringType(), True),
+                            StructField('2003', IntegerType(), False), StructField('2004', IntegerType(), False),
+                            StructField('2005', IntegerType(), False), StructField('2006', IntegerType(), False),
+                            StructField('2007', IntegerType(), False), StructField('2008', IntegerType(), False),
+                            StructField('2009', IntegerType(), False), StructField('2010', IntegerType(), False),
+                            StructField('2011', IntegerType(), False), StructField('2012', IntegerType(), False),
+                            StructField('2013', IntegerType(), False), StructField('2014', IntegerType(), False),
+                            StructField('2015', IntegerType(), False), StructField('2016', IntegerType(), False),
+                            StructField('2017', IntegerType(), False), StructField('2018', IntegerType(), False),
+                            StructField('2019', IntegerType(), False), StructField('2020', IntegerType(), False)])
+
+    q3_cols = ['Technology', 'Era', '2003', '2004', '2005', '2006', '2007', '2008', '2009', '2010',
+               '2011', '2012', '2013', '2014', '2015', '2016', '2017', '2018', '2019', '2020']
+
+    # Temporary holding pin for the results before being converted to a DataFrame
+    q3_data: ArrayType(list) = []
+    # Looping through every technology listed in the tech_dictionary
+    for tech, era in tech_dict.items():
+        temp = [tech, era, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        print(f"Calculating yearly data for {tech}...")
+        years = tech_mentions(tech, 2003, 2020)
+        i = 2
+        for year in years:
+            temp[i] = year
+            i += 1
+        print(temp)
+        row = (temp[0], temp[1], int(temp[2]), int(temp[3]), int(temp[4]), int(temp[5]), int(temp[6]),
+               int(temp[7]), int(temp[8]), int(temp[9]), int(temp[10]), int(temp[11]), int(temp[12]),
+               int(temp[13]), int(temp[14]), int(temp[15]), int(temp[16]), int(temp[17]), int(temp[18]),
+               int(temp[19]))
+        q3_data.append(row)
+
+    print(q3_data)
+
+    # Creating a Spark DataFrame from the raw data
+    q3_df = spark.createDataFrame(q3_data, q3_schema)
+
+    # Printing for quality assurance
+    print(q3_df.show(10))
+
+    # Saving the result data to a save file
+    q3_df.write.mode('overwrite')\
+        .csv("output/q3_tech_mentions.tsv", sep='\t', header='True', lineSep='\n')
+
+    # Creating graphs from the produced data
+
 
 # Q4:  What city hosted the most tech based events?
 def q4(spark: SparkSession, df: ps.sql.DataFrame):
@@ -95,87 +168,13 @@ def q8(spark: SparkSession, df: ps.sql.DataFrame):
 def q9(spark: SparkSession, df: ps.sql.DataFrame):
     print("Analysis 9 started...")
 
-    # Aux function to find all mentions of a given technology in the descriptions of meetings spanning the given years.
-    def tech_mentions(technology, year_start, year_end) -> list[int]:
-        interim_1 = df.select('description', 'time').filter(df['description'].contains(technology))
-        working_list: list[int] = []
-        for year in range(year_start, year_end+1):
-            print(f"\t\tcalculating for year {year}...")
-            start_millis = (year - 1970) * 31536000000
-            end_millis = (year + 1 - 1970) * 31536000000
-
-            result = interim_1                          \
-                .filter(start_millis <= df['time'])     \
-                .filter(df['time'] <= end_millis)       \
-                .count()
-            working_list.append(result)
-
-        return working_list
-
-    # Dictionary containing all of the technologies and their era (<, >, =90's)
-    tech_dict = {"ada": "<90's",        "android": ">90's",     "clojure": ">90's",     "cobol": "<90's",
-                 "dart": ">90's",       "delphi": "=90's",      "fortran": "<90's",     "ios": ">90's",
-                 "java": "=90's",       "javascript": "=90's",  "kotlin": ">90's",      "labview": "<90's",
-                 "matlab": "<90's",     "pascal": "<90's",      "perl": "<90's",        "php": "90's",
-                 "powershell": ">90's", "python": "=90's",      "ruby": "=90's",        "rust": ">90's",
-                 "scala": ">90's",      "sql": "<90's",         "typescript": ">90's",  "visual basic ": "=90's",
-                 "wolfram": "<90's"}
-
-    # Creating the schema for the results DataFrame
-    q9_schema = StructType([
-        StructField('Technology', StringType(), True),
-        StructField('Era',  StringType(),  True),
-        StructField('2003', IntegerType(), False),
-        StructField('2004', IntegerType(), False),
-        StructField('2005', IntegerType(), False),
-        StructField('2006', IntegerType(), False),
-        StructField('2007', IntegerType(), False),
-        StructField('2008', IntegerType(), False),
-        StructField('2009', IntegerType(), False),
-        StructField('2010', IntegerType(), False),
-        StructField('2011', IntegerType(), False),
-        StructField('2012', IntegerType(), False),
-        StructField('2013', IntegerType(), False),
-        StructField('2014', IntegerType(), False),
-        StructField('2015', IntegerType(), False),
-        StructField('2016', IntegerType(), False),
-        StructField('2017', IntegerType(), False),
-        StructField('2018', IntegerType(), False),
-        StructField('2019', IntegerType(), False),
-        StructField('2020', IntegerType(), False)
-    ])
-
-    q9_cols = ['Technology', 'Era', '2003', '2004', '2005', '2006', '2007', '2008', '2009', '2010',
-               '2011', '2012', '2013', '2014', '2015', '2016', '2017', '2018', '2019', '2020']
-
-    # Temporary holding pin for the results before being converted to a DataFrame
-    q9_data = []
-    # Looping through every technology listed in the tech_dictionary
-    for tech, era in tech_dict.items():
-        temp = [tech, era]
-        print(f"Calculating yearly data for {tech}...")
-        years = tech_mentions(tech, 2003, 2020)
-        for year in years:
-            temp.append(year)
-        print(temp)
-        q9_data += temp
-
-    # Converting the data into an RDD then a Spark DataFrame
-    q9_rdd = spark.sparkContext.parallelize(q9_data)
-    q9_df = q9_rdd.toDF(q9_cols).orderBy('Era', 'Technology')
-
-    # Printing for quality assurance
-    print(q9_df.show(10))
-
-    # Saving the result data to a save file
-    q9_df.write.csv("output/q9_tech_mentions.csv", sep="\t", header="true")
-
-    # Creating graphs from the produced data
-
 
 # Q10:  Are events with longer durations more popular than shorter?
 def q10(spark: SparkSession, df: ps.sql.DataFrame):
     print("Analysis 10 started...")
+    q10_base_df = df.select('duration')
+
+
 
 
 # Q11:  Has there been a change in planning times for events?
@@ -675,7 +674,7 @@ def main():
         "Mount Pleasant, SC": -18000000,
         "Mountain View, CA": -28800000,
         "Muncie, IN": -18000000,
-        "Murfreesboro, TN": -21600000 ,
+        "Murfreesboro, TN": -21600000,
         "Naperville, IL": -21600000,
         "Naples, FL": -18000000,
         "Neenah, WI": -21600000,
@@ -1056,13 +1055,13 @@ def main():
     base_df.printSchema()
 
     # Modifying the column data types to match data
-    base_df = base_df.withColumn('id', F.col('id').cast(LongType()))                             \
-                     .withColumn('v_id', F.col('v_id').cast(LongType()))                         \
-                     .withColumn('local_date', date_parser_udf('local_date'))                       \
-                     .withColumn('time_offset', tz_parser_udf('localized_location'))                \
-                     .withColumn('adj_creation_time', F.col('created') + F.col('time_offset'))      \
-                     .withColumn('past', status_parser_udf('status'))                               \
-                     .withColumn('is_online_event', F.col('is_online_event').cast(BooleanType()))
+    base_df = base_df.withColumn('id', F.col('id').cast(LongType())) \
+        .withColumn('v_id', F.col('v_id').cast(LongType())) \
+        .withColumn('local_date', date_parser_udf('local_date')) \
+        .withColumn('time_offset', tz_parser_udf('localized_location')) \
+        .withColumn('adj_creation_time', F.col('created') + F.col('time_offset')) \
+        .withColumn('past', status_parser_udf('status')) \
+        .withColumn('is_online_event', F.col('is_online_event').cast(BooleanType()))
     # .withColumn('cat_ids', cat_parser_udf('cat_ids'))
 
     new_cols_list = ["time_offset", "adj_creation_time", "past"]
