@@ -61,6 +61,32 @@ def menu() -> int:
 # ----------------------------------------------------------------------------------------------------------------------
 def q1(spark: SparkSession, df: ps.sql.DataFrame):
     print("Analysis 1 started...")
+    q1_data: ArrayType(list) = []
+    for year in range(2003, 2021):
+        year_data = [year]
+
+        for month in range(1, 13):
+            if month != 12:
+                month_start = datetime(year, month, 1).timestamp()
+                month_end = datetime(year, month + 1, 1).timestamp()
+            else:
+                month_start = datetime(year, month, 1).timestamp()
+                month_end = datetime(year + 1, 1, 1).timestamp()
+
+            month_total = df                            \
+                .filter(df['created'] > month_start)    \
+                .filter(df['created'] <= month_end)     \
+                .count()
+
+            year_data.append(month_total)
+
+        q1_data.append(year_data)
+
+        # Still need to create and append totals row
+
+        q1_df = spark.createDataFrame(q1_data)
+
+        print(q1_df.take(10))
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -68,6 +94,8 @@ def q1(spark: SparkSession, df: ps.sql.DataFrame):
 # ----------------------------------------------------------------------------------------------------------------------
 def q2(spark: SparkSession, df: ps.sql.DataFrame):
     print("Analysis 2 started...")
+    online_events_df = df \
+        .select('date_month')
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -82,8 +110,8 @@ def q3(spark: SparkSession, df: ps.sql.DataFrame):
         working_list: list[int] = []
         for y in range(year_start, year_end + 1):
             print(f"\t\tcalculating for year {y}...")
-            start_millis = (y - 1970) * 31536000000
-            end_millis = (y + 1 - 1970) * 31536000000
+            start_millis = datetime(y, 1, 1).timestamp()
+            end_millis = datetime(y + 1, 1, 1).timestamp()
 
             result = interim_1 \
                 .filter(start_millis <= df['time']) \
@@ -144,9 +172,9 @@ def q3(spark: SparkSession, df: ps.sql.DataFrame):
     print(q3_df.show(10))
 
     # Saving the result data to a save file
-    q3_df \
-        .write \
-        .mode('overwrite') \
+    q3_df                                               \
+        .write                                          \
+        .mode('overwrite')                              \
         .csv("output/q3_tech_mentions.tsv", sep='\t')
 
     # Creating graphs from the produced data
@@ -160,6 +188,13 @@ def q3(spark: SparkSession, df: ps.sql.DataFrame):
 # ----------------------------------------------------------------------------------------------------------------------
 def q4(spark: SparkSession, df: ps.sql.DataFrame):
     print("Analysis 4 started...")
+    result_df = df                         \
+        .groupby('localized_location')  \
+        .count()                        \
+        .orderby('count')
+    row = result_df[0:1]
+
+    print(row)
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -167,6 +202,22 @@ def q4(spark: SparkSession, df: ps.sql.DataFrame):
 # ----------------------------------------------------------------------------------------------------------------------
 def q5(spark: SparkSession, df: ps.sql.DataFrame):
     print("Analysis 5 started...")
+    result_df = df          \
+        .groupby('v_id')    \
+        .count()            \
+        .orderBy('count')
+
+    result_df                                   \
+        .write                                  \
+        .mode('overwrite')                      \
+        .csv("output/q5_result.tsv", sep='\t')
+
+    print("The venue with the most events was:")
+    print(f"\t{str(result_df.select('v_name'))}")
+    print(f"\tlocated in {str(result_df.select('localized_location'))}")
+    print(f"\twith {str(result_df.select('count'))} events.")
+
+    result_df.unpersist()
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -174,6 +225,15 @@ def q5(spark: SparkSession, df: ps.sql.DataFrame):
 # ----------------------------------------------------------------------------------------------------------------------
 def q6(spark: SparkSession, df: ps.sql.DataFrame):
     print("Analysis 6 started...")
+    result = df                                 \
+        .select('v_id', 'localized_location')   \
+        .groupby('v_id')                        \
+        .count()                                \
+        .groupby('localized_location')          \
+        .sum('count')
+    row = result.max('count')
+
+    print(row)
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -232,48 +292,48 @@ def q10(spark: SparkSession, df: ps.sql.DataFrame):
     print("Analysis 10 started...")
 
     # Creating initial DataFrame for the analysis to work with
-    q10_df = \
-        df.select('duration') \
-            .filter(df['duration'].isNotNull()) \
-            .withColumn('mins', f.col('duration') / 60000) \
-            .groupby('min') \
-            .count() \
- \
+    q10_df = df                                         \
+        .select('duration')                             \
+        .filter(df['duration'].isNotNull())             \
+        .withColumn('mins', f.col('duration') / 60000)  \
+        .groupby('min')                                 \
+        .count()
+
     # First analysis: count up occurrences of each duration and order by count (i.e. most common)
     print("\trunning analysis by count...")
-    q10_by_count = q10_df \
-        .sort(f.desc('count')) \
+    q10_by_count = q10_df       \
+        .sort(f.desc('count'))  \
         .limit(20)
 
-    q10_by_count \
-        .write \
-        .mode('overwrite') \
+    q10_by_count                                    \
+        .write                                      \
+        .mode('overwrite')                          \
         .csv("output/q10_by_count.tsv", sep='\t')
 
     q10_by_count.unpersist()
 
     # Second analysis: count up occurrences oif each duration in the first 24 hours (1440 minutes)
     print("\trunning analysis for first day...")
-    q10_day_one = q10_df \
-        .filter(df['min'] < 1440) \
+    q10_day_one = q10_df            \
+        .filter(df['min'] < 1440)   \
         .orderBy('min')
 
-    q10_day_one \
-        .write \
-        .mode('overwrite') \
+    q10_day_one                                     \
+        .write                                      \
+        .mode('overwrite')                          \
         .csv("output/q10_day_one.tsv", sep='\t')
 
     q10_day_one.unpersist()
 
     # Third analysis: count up the occurrences of each duration after the first 24 hours
     print("\trunning analysis for remaining days...")
-    q10_beyond_day_one = q10_df \
-        .filter(df['min'] <= 1440) \
+    q10_beyond_day_one = q10_df     \
+        .filter(df['min'] <= 1440)  \
         .orderBy('min')
 
-    q10_beyond_day_one \
-        .write \
-        .mode('overwrite') \
+    q10_beyond_day_one                                  \
+        .write                                          \
+        .mode('overwrite')                              \
         .csv("output/q10_beyond_day_one.tsv", sep='\t')
 
     q10_beyond_day_one.unpersist()
@@ -288,12 +348,12 @@ def q11(spark: SparkSession, df: ps.sql.DataFrame):
     print("Analysis 11 started...")
 
     # Creating initial DataFrame for the analysis to work with
-    q11_df = df \
-        .select('created', 'time') \
-        .filter(df['created'].isNotNull()) \
-        .filter(df['time'].isNotNull()) \
-        .withColumn('prepping_period', df['time'] - df['created']) \
-        .withColumn('prep_min', df['prepping_period'] / 60000) \
+    q11_df = df                                                     \
+        .select('created', 'time')                                  \
+        .filter(df['created'].isNotNull())                          \
+        .filter(df['time'].isNotNull())                             \
+        .withColumn('prepping_period', df['time'] - df['created'])  \
+        .withColumn('prep_min', df['prepping_period'] / 60000)      \
         .filter(df['prep_min'] > 0)
 
     # Creating temporary data holding structure
@@ -306,11 +366,11 @@ def q11(spark: SparkSession, df: ps.sql.DataFrame):
         end_millis = datetime(yr + 1, 1, 1).timestamp()
 
         # Creating a temporary DataFrame of filtered results to assess
-        prep_df = q11_df \
-            .filter(df['time'] > start_millis) \
-            .filter(df['time'] < end_millis) \
-            .groupby('prep_min') \
-            .count() \
+        prep_df = q11_df                                            \
+            .filter(df['time'] > start_millis)                      \
+            .filter(df['time'] < end_millis)                        \
+            .groupby('prep_min')                                    \
+            .count()                                                \
             .withColumn('prep_time', df['prep_min'] * df['count'])
 
         # Calculating total prep time for all events, total events, and average
@@ -329,9 +389,9 @@ def q11(spark: SparkSession, df: ps.sql.DataFrame):
                              StructField('Average Prep Time', IntegerType(), True)])
     q11_results_df = spark.createDataFrame(q11_data, q11_schema)
 
-    q11_results_df \
-        .write \
-        .mode('overwrite') \
+    q11_results_df                                      \
+        .write                                          \
+        .mode('overwrite')                              \
         .csv("output/q11_avg_prep_time.tsv", sep='\t')
 
 
@@ -340,6 +400,19 @@ def q11(spark: SparkSession, df: ps.sql.DataFrame):
 # ----------------------------------------------------------------------------------------------------------------------
 def q12(spark: SparkSession, df: ps.sql.DataFrame):
     print("Analysis 12 started...")
+    result_df = df                                                          \
+        .select("id", f.expr("struct(yes_rsvp_count as cmp, *) as row"))    \
+        .groupby("id")                                                      \
+        .agg(max("row").alias("row"))                                       \
+        .select("row.*")                                                    \
+        .drop("cmp")
+
+    print(result_df)
+
+    result_df                                   \
+        .write                                  \
+        .mode('overwrite')                      \
+        .csv("output/q12_result.tsv", sep='\t')
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -388,7 +461,7 @@ def main():
 
     # ----------------------------------------------------------------------------------------------------------
     # ---------------------------------------- UDFs and Base Functions -----------------------------------------
-    # | Creating DataFrame UDFs to properly type each column                                                   |
+    # | Creating DataFrame UDFs to properly format data and type each column                                   |
     # ----------------------------------------------------------------------------------------------------------
 
     # Function and UDF to convert string dates in DF into millisecond timestamps
@@ -396,6 +469,14 @@ def main():
         return datetime.strptime(date_string, "%Y-%m-%d")
 
     date_parser_udf = f.udf(date_parser, DateType())
+
+    def status_parser(status: str) -> bool:
+        if status == "past":
+            return True
+        else:
+            return False
+
+    status_parser_udf = f.udf(status_parser, BooleanType())
 
     # UDF created from the tz_offset_calculator function in the ae_helper
     tz_parser_udf = f.udf(ae_helper.tz_offset_calc, LongType())
@@ -412,33 +493,27 @@ def main():
     #
     # cat_parser_udf = F.udf(cat_ids_parser, ArrayType(IntegerType()))
 
-    def status_parser(status: str) -> bool:
-        if status == "past":
-            return True
-        else:
-            return False
+    # def state_venue(loc_loc: str, v_id: str) -> str:
+    #     return loc_loc[-2:] + "-" + v_id
+    #
+    # state_venue_udf = f.udf(state_venue, StringType())
 
-    status_parser_udf = f.udf(status_parser, BooleanType())
-
-    # Creating a list of column names for the resulting DataFrame for reference
+    base_df = spark.read.load('all_cities.tsv', format='csv', header='True', sep='\t', inferSchema="true")
     # df_cols = ["id", "name", "group_name", "urlname", "v_id", "v_name", "local_date", "date_month", "local_time",
     #            "localized_location", "is_online_event", "status", "cat_ids", "duration", "time", "created",
     #            "yes_rsvp_count", "rsvp_limit", "accepts", "amount", "description"]
-    base_df = spark.read.load('all_cities.tsv', format='csv', header='True', sep='\t', inferSchema="true")
 
     print(base_df.show(10))
     print("\n\n")
 
-    base_df.printSchema()
-
     # Modifying the column data types to match data
-    base_df = base_df.withColumn('id', f.col('id').cast(LongType())) \
-        .withColumn('v_id', f.col('v_id').cast(LongType())) \
-        .withColumn('local_date', date_parser_udf('local_date')) \
-        .withColumn('time_offset', tz_parser_udf('localized_location')) \
-        .withColumn('adj_creation_time', f.col('created') + f.col('time_offset')) \
-        .withColumn('past', status_parser_udf('status')) \
+    base_df = base_df                                                                   \
+        .withColumn('local_date', date_parser_udf('local_date'))                        \
+        .withColumn('time_offset', tz_parser_udf('localized_location'))                 \
+        .withColumn('adj_creation_time', f.col('created') + f.col('time_offset'))       \
+        .withColumn('past', status_parser_udf('status'))                                \
         .withColumn('is_online_event', f.col('is_online_event').cast(BooleanType()))
+    # .withColumn('state_venue', state_venue_udf('localized_location', 'v_id'))
     # .withColumn('cat_ids', cat_parser_udf('cat_ids'))
 
     # new_cols_list = ["time_offset", "adj_creation_time", "past"]

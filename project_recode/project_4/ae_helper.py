@@ -22,7 +22,7 @@ def output_converter(in_path: str, col_names: str):
 
 def tz_offset_calc(location: str) -> int:
     eastern_tz = {"ME", "NH", "VT", "MA", "RI", "CT", "NJ", "NY", "PA", "WV", "DC",
-                  "GA", "VA", "NC", "SC", "FL", "OH", "MI", "IN", "KY", "DE"}
+                  "GA", "VA", "NC", "SC", "FL", "OH", "MI", "IN", "KY", "DE", "ON"}
     central_tz = {"WI", "MN", "ND", "SD", "NE", "IA", "MO", "IL", "KS", "OK", "AR",
                   "LA", "MA", "AL", "TX"}
     mountain_tz = {"NM", "CO", "WY", "MT", "ID", "UT", "AZ"}
