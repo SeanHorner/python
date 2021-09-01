@@ -1,1 +1,1 @@
-This repository contains all of the Django tutorials and training projects I've done.
+This repository contains tutorials and training projects related to the Django webframework library.
