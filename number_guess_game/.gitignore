@@ -1,0 +1,3 @@
+# Avoiding PyCharm configuration files
+/.idea/
+/venv/
